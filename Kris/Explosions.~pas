@@ -1,0 +1,202 @@
+unit Explosions;
+
+interface
+
+uses
+  Graphics, Engine_beta1, SysUtils;
+
+const
+  MaxExp8 = 4096;
+  MaxExp16 = 128;
+  MaxExp24 = 64;
+  MaxExp64 = 32;
+
+  G = 0.012;     // Gravity koef.
+  u = 0.01;     // Friction koef.
+
+type
+  PExplosion = ^TExplosion;
+
+  TPerformPartProc = procedure(pexp: PExplosion);
+
+  TExplosion = record
+    Size: byte;
+    Life,
+    Counter,
+    AnimStep, AnimSleep,
+    FramePos: word;
+    X, Y, MoveX, MoveY: real;
+    Visible, Animated: boolean;
+    PerformProc: TPerformPartProc;
+end;
+
+var
+  ExpAnimated: boolean = true;
+  ExpAnimSleep: byte = 5;
+  ExpAnimStep: byte = 1;
+  ExpFramePos: integer = 0;
+
+procedure InitExp;
+procedure AddExp(X, Y, MoveX, MoveY: real; Life: word; Size: byte; Proc: TPerformPartProc);
+procedure DrawExp(Buffer: TBitmap);
+procedure ClearOldExp;
+procedure DestroyExp;
+
+implementation
+
+var
+  ExpN: array [0..3] of TSprite;
+
+  Exp8: array [0..MaxExp8 - 1] of TExplosion;
+  Exp16: array [0..MaxExp16 - 1] of TExplosion;
+  Exp24: array [0..MaxExp24 - 1] of TExplosion;
+  Exp64: array [0..MaxExp64 - 1] of TExplosion;
+
+  NumExp8: word = 0;
+  NumExp16: word = 0;
+  NumExp24: word = 0;
+  NumExp64: word = 0;
+
+procedure InitExp;
+var
+  i: byte;
+
+  procedure InitExpN(var Spr: TSprite; Size: word);
+  begin
+    if Spr = nil then
+    begin
+      Spr := TSprite.Create;
+      Spr.SetParams('Data\Exp' + IntToStr(Size) + '.bmp', '', Size, Size, clWhite, 0);
+      Spr.Visible := true;
+    end;
+  end;
+
+begin
+  for i := 0 to 3 do
+    if i < 3 then InitExpN(ExpN[i], 8 * (i + 1))
+      else InitExpN(ExpN[i], 64);
+end;
+
+procedure AddExp(X, Y, MoveX, MoveY: real; Life: word; Size: byte; Proc: TPerformPartProc);
+
+  procedure AddExpN(var Exp: array of TExplosion; var Spr: TSprite; MaxExpN: word; var NumExpN: word);
+  var
+    i: word;
+  begin
+    if NumExpN < MaxExpN then
+      for i := 0 to MaxExpN - 1 do
+        if not Exp[i].Visible then
+        begin
+          Exp[i].X := X;
+          Exp[i].Y := Y;
+          Exp[i].MoveX := MoveX;
+          Exp[i].MoveY := MoveY;
+          Spr.X := X;
+          Spr.Y := Y;
+          Exp[i].Life := Life;
+          Exp[i].Counter := Life;
+          Exp[i].Animated := ExpAnimated;
+          Exp[i].AnimSleep := ExpAnimSleep;
+          Exp[i].AnimStep := ExpAnimStep;
+          Exp[i].FramePos := ExpFramePos;
+          Exp[i].Visible := true;
+          Exp[i].PerformProc := Proc;
+          inc(NumExpN);
+          exit;
+        end;
+  end;
+
+begin
+  case Size of
+    0: AddExpN(Exp8, ExpN[0], MaxExp8, NumExp8);
+    1: AddExpN(Exp16, ExpN[1], MaxExp16, NumExp16);
+    2: AddExpN(Exp24, ExpN[2], MaxExp24, NumExp24);
+    3: AddExpN(Exp64, ExpN[3], MaxExp64, NumExp64);
+  end;
+end;
+
+procedure DrawExp(Buffer: TBitmap);
+
+  procedure DrawExpN(var Exp: array of TExplosion; var Spr: TSprite; MaxExpN: word);
+  var
+    i: word;
+    F_x, F_y: real;
+  begin
+    for i := 0 to MaxExpN - 1 do
+      if Exp[i].Visible then
+      begin
+        Spr.X := Exp[i].X;
+        Spr.Y := Exp[i].Y;
+        Spr.Animated := Exp[i].Animated;
+        Spr.FramePos := Exp[i].FramePos;
+        Spr.AnimStep := Exp[i].AnimStep;
+        Spr.AnimSleep := Exp[i].AnimSleep;
+        Spr.Visible := Exp[i].Visible;
+        if Spr.FramePos = Spr.AnimEnd then
+        begin
+          Spr.Animated := false;
+          Exp[i].Animated := false;
+        end;
+        Spr.Draw(Buffer);
+        Spr.X := Spr.X + Exp[i].MoveX;
+        Spr.Y := Spr.Y + Exp[i].MoveY;
+        F_x := -Exp[i].MoveX * u;
+        F_y := -Exp[i].MoveY * u;
+        Exp[i].MoveX := Exp[i].MoveX + F_x;
+        Exp[i].MoveY := Exp[i].MoveY + F_y + G;
+        Exp[i].X := Spr.X;
+        Exp[i].Y := Spr.Y;
+        Exp[i].FramePos := Spr.FramePos;
+        if Exp[i].Counter > 0 then dec(Exp[i].Counter);
+
+        if @Exp[i].PerformProc <> nil then
+          Exp[i].PerformProc(@Exp[i]);
+      end;
+  end;
+
+begin
+  DrawExpN(Exp8, ExpN[0], MaxExp8);
+  DrawExpN(Exp16, ExpN[1], MaxExp16);
+  DrawExpN(Exp24, ExpN[2], MaxExp24);
+  DrawExpN(Exp64, ExpN[3], MaxExp64);
+end;
+
+procedure ClearOldExp;
+
+  procedure ClearOldExpN(var Exp: array of TExplosion; MaxExpN: word; var NumExpN: word);
+  var
+    i: word;
+  begin
+    for i := 0 to MaxExpN - 1 do
+      if Exp[i].Visible and (Exp[i].Counter = 0) then
+      begin
+        Exp[i].Visible := false;
+        Exp[i].FramePos := 0;
+        dec(NumExpN);
+      end;
+  end;
+
+begin
+  ClearOldExpN(Exp8, MaxExp8, NumExp8);
+  ClearOldExpN(Exp16, MaxExp16, NumExp16);
+  ClearOldExpN(Exp24, MaxExp24, NumExp24);
+  ClearOldExpN(Exp64, MaxExp64, NumExp64);
+end;
+
+procedure DestroyExp;
+
+  procedure DestroyExpN(var Spr: TSprite; var NumExpN: word);
+  begin
+    Spr.Free;
+    dec(NumExpN);
+  end;
+
+begin
+  DestroyExpN(ExpN[0], NumExp8);
+  DestroyExpN(ExpN[1], NumExp16);
+  DestroyExpN(ExpN[2], NumExp24);
+  DestroyExpN(ExpN[3], NumExp64);
+end;
+
+
+end.
