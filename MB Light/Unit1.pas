@@ -7,6 +7,16 @@ uses
   Dialogs, ComCtrls, Com32, StdCtrls, ExtCtrls;
 
 type
+
+    TMyThread = class(TThread)
+    widthZoneStart, widthZoneEnd, heightZone  : Integer;
+    PBmp: ^TBitmap;
+    result : TColor;
+    private
+    protected
+    procedure Execute; override;
+  end;
+
   TForm1 = class(TForm)
     cbxPortList: TComboBox;
     Label1: TLabel;
@@ -19,8 +29,13 @@ type
     edtRereadDelay: TEdit;
     Label4: TLabel;
     edtHeightZone: TEdit;
+    Timer2: TTimer;
+    Panel2: TPanel;
+    Panel3: TPanel;
+    Panel4: TPanel;
+    Panel5: TPanel;
    
-    
+
     procedure FormCreate(Sender: TObject);
 
 
@@ -30,6 +45,7 @@ type
     procedure edtHeightZoneChange(Sender: TObject);
     procedure edtColorChangeAccurChange(Sender: TObject);
     procedure edtRereadDelayChange(Sender: TObject);
+    procedure Timer2Timer(Sender: TObject);
   private
     { Private declarations }
   public
@@ -38,15 +54,20 @@ type
      shotZone : TRect;
      c: TCanvas;
      averageColour: TColor;
-     ir, ig, ib, r, g, b, oldR, oldG, oldB, size: Integer;
+     ir, ig, ib, r, g, b, oldR, oldG, oldB, size, ledsCount: Integer;
      rgbColour: LongInt;
      heightZone, rereadDelay, colourAccur: Integer;
+     averageColourArray: array[1..20] of TColor; getColourProcArr: array[1..10] of TMyThread;
   end;
+
+
+
 
 var
   Form1: TForm1;
   FComPort : TCommPort;
   FCbxList : TList;
+  GetColourThread: TMyThread;
 
 implementation
 
@@ -60,6 +81,7 @@ begin
   rereadDelay:= StrToInt(edtRereadDelay.Text);
   Timer1.Interval:= rereadDelay;
   oldR:= 0; oldG:=0; oldB:=0;
+  ledsCount:=4;
   FComPort := TCommPort.Create;
   ScanPorts(cbxPortList.Items, 25, False);
   if (cbxPortList.Items.Count = 0) then
@@ -177,6 +199,81 @@ begin
      except
    ShowMessage('¬ведите целое значение');
 end;
+end;
+
+procedure TMyThread.Execute;
+var    i, j, r, g, b, size: Integer;
+begin
+r :=0; g:=0; b:=0; size:=(widthZoneEnd-widthZoneStart)*heightZone;
+for  i:=0 to heightZone do
+ begin
+  for j:=widthZoneStart to widthZoneEnd do
+  begin
+      r:= r + GetRValue(ColorToRGB(PBmp^.Canvas.Pixels[j,i]));
+      g:= g + GetGValue(ColorToRGB(PBmp^.Canvas.Pixels[j,i]));
+      b:= b + GetBValue(ColorToRGB(PBmp^.Canvas.Pixels[j,i]));
+
+  end;
+
+ end;
+
+   r := Round(r / size);
+   g := Round(g / size);
+   b := Round(b / size);
+
+   result:= RGB(r,g,b);
+
+end;
+
+
+
+
+procedure TForm1.Timer2Timer(Sender: TObject);
+var i,j :Integer; isReady: boolean;
+begin
+size:= heightZone * Screen.Width;
+  DC:=GetDC(0);
+  bmp:=TBitmap.Create;
+  bmp.Height:=heightZone;
+  bmp.Width:=Screen.Width;
+bitblt(bmp.Canvas.Handle, 0, 0, Screen.Width, heightZone, DC, 0, Screen.Height-heightZone, SRCCOPY);
+//bmp.SaveToFile('D:/Screen.jpg');
+
+for i:= 1 to ledsCount do
+  begin
+     getColourProcArr[i] := TMyThread.Create(true);
+     getColourProcArr[i].widthZoneStart:= (Round(Screen.Width/ledsCount))*i - (Round(Screen.Width/ledsCount));
+     getColourProcArr[i].widthZoneEnd:= (Round(Screen.Width/ledsCount))* i;
+     getColourProcArr[i].PBmp := @bmp;
+     getColourProcArr[i].heightZone:= heightZone;
+     getColourProcArr[i].Priority:=tpNormal;
+     getColourProcArr[i].Execute;
+  end;
+
+  while not(isReady) do
+  begin
+    isReady := getColourProcArr[1].Terminated;
+    for i:=1 to  ledsCount do
+    begin
+         isReady :=isReady AND getColourProcArr[i].Terminated;
+    end;
+  end;
+
+  for i:=1 to  ledsCount do
+  begin
+       averageColourArray[i] := getColourProcArr[i].result;
+       getColourProcArr[i].Destroy;
+  end;
+
+  Panel2.Color:=  averageColourArray[1];
+  Panel3.Color:=  averageColourArray[2];
+  Panel4.Color:=  averageColourArray[3];
+  Panel5.Color:=  averageColourArray[4];
+
+
+
+ReleaseDC(0, DC);
+bmp.Free;
 end;
 
 end.

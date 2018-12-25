@@ -1,7 +1,7 @@
 object Form1: TForm1
   Left = 517
   Top = 206
-  Width = 286
+  Width = 448
   Height = 358
   Caption = 'RGB '#1082#1086#1085#1090#1088#1086#1083#1083#1077#1088
   Color = clBtnFace
@@ -60,8 +60,8 @@ object Form1: TForm1
     TabOrder = 1
   end
   object Panel1: TPanel
-    Left = 48
-    Top = 168
+    Left = 240
+    Top = 16
     Width = 177
     Height = 49
     Caption = 'Test Colour'
@@ -94,10 +94,49 @@ object Form1: TForm1
     Text = '300'
     OnChange = edtRereadDelayChange
   end
+  object Panel2: TPanel
+    Left = 24
+    Top = 168
+    Width = 41
+    Height = 41
+    Caption = 'Panel2'
+    TabOrder = 6
+  end
+  object Panel3: TPanel
+    Left = 96
+    Top = 168
+    Width = 41
+    Height = 41
+    Caption = 'Panel2'
+    TabOrder = 7
+  end
+  object Panel4: TPanel
+    Left = 176
+    Top = 168
+    Width = 41
+    Height = 41
+    Caption = 'Panel2'
+    TabOrder = 8
+  end
+  object Panel5: TPanel
+    Left = 248
+    Top = 168
+    Width = 41
+    Height = 41
+    Caption = 'Panel2'
+    TabOrder = 9
+  end
   object Timer1: TTimer
+    Enabled = False
     Interval = 300
     OnTimer = Timer1Timer
     Left = 224
     Top = 240
+  end
+  object Timer2: TTimer
+    Interval = 300
+    OnTimer = Timer2Timer
+    Left = 136
+    Top = 280
   end
 end
